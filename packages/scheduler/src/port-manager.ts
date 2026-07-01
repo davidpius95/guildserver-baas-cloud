@@ -82,12 +82,22 @@ export async function allocatePortBase(nodeId: string, tx: Executor): Promise<nu
     }
     // eslint-disable-next-line no-await-in-loop
     if (await windowIsFree(candidate)) {
+      // Upsert: a previously-released window for this (node, port) still has a row
+      // (kept for audit) that would collide with the unique index — reuse it.
       // eslint-disable-next-line no-await-in-loop
-      await tx.insert(baasPortAllocations).values({
-        nodeId,
-        portBase: candidate,
-        status: "reserved",
-      });
+      await tx
+        .insert(baasPortAllocations)
+        .values({ nodeId, portBase: candidate, status: "reserved" })
+        .onConflictDoUpdate({
+          target: [baasPortAllocations.nodeId, baasPortAllocations.portBase],
+          set: {
+            status: "reserved",
+            projectId: null,
+            reservedAt: new Date(),
+            boundAt: null,
+            releasedAt: null,
+          },
+        });
       return candidate;
     }
     // OS says occupied though DB didn't know — skip and log.
