@@ -34,6 +34,8 @@ jobs:
             echo "== installing deps =="
             export PATH="$HOME/.local/share/pnpm:$PATH"
             pnpm install --frozen-lockfile
+            echo "== loading env =="
+            set -a; . ./.env; set +a
             echo "== running migrations =="
             pnpm db:migrate
             echo "== rebuilding platform stack =="
