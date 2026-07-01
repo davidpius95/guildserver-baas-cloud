@@ -447,7 +447,12 @@ Implemented per §5.12 (live `docker update` + conditional conf-rewrite/restart 
 
 ## 13. Phase 10 — REST API (OpenAPI)
 
-Stretch/optional. `pnpm add trpc-openapi --filter @guildserver/baas-api`; add `.meta()` per procedure; mount `createOpenApiExpressMiddleware` at `/api/v1` + serve `/api/v1/openapi.json`. Yields a Supabase-style Management API.
+> **`[REVISED — IMPLEMENTED as a REST facade]`** `trpc-openapi` only supports tRPC v10 and the maintained v11 successor (`trpc-to-openapi`) requires migrating every exposed router to Zod v4 schemas + explicit `.output()` parsers — an invasive change for a stretch phase. Implemented instead as a thin, hand-rolled REST facade over the existing tRPC caller: single source of business logic, no router/schema churn.
+
+- **`apps/api/src/routes/rest-api.ts`** — Express router mounted at `/api/v1`; each route builds a tRPC caller from the request's auth context (`createContext` → `appRouter.createCaller`) and delegates to the matching procedure. tRPC error codes → HTTP status. 30+ endpoints (auth, organizations, projects + lifecycle, backups, domains, metrics, branches, nodes).
+- **`apps/api/src/routes/openapi.ts`** — hand-written OpenAPI 3.1 document served at `/api/v1/openapi.json`; Swagger UI at `/api/v1/docs`. Bearer-JWT security scheme; `auth/register` + `auth/login` are the only unauthenticated routes.
+
+Yields a Supabase-style Management API without a Zod v3→v4 migration.
 
 ---
 

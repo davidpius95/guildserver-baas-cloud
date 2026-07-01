@@ -6,6 +6,8 @@ import { assertBootEnv, env } from "./env.js";
 import { createContext } from "./trpc/context.js";
 import { appRouter } from "./trpc/router.js";
 import { studioConfigHandler } from "./routes/studio-config.js";
+import { restApiRouter } from "./routes/rest-api.js";
+import { docsHandler, openApiJsonHandler } from "./routes/openapi.js";
 import { startWorkers } from "./workers.js";
 import { startCrons } from "./crons.js";
 
@@ -36,6 +38,11 @@ app.use(
     createContext,
   }),
 );
+
+// ── REST facade (Supabase-style Management API) + OpenAPI docs ──
+app.get("/api/v1/openapi.json", openApiJsonHandler);
+app.get("/api/v1/docs", docsHandler);
+app.use("/api/v1", restApiRouter);
 
 const workers = startWorkers();
 const crons = startCrons();
