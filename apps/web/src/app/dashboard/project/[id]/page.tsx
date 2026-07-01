@@ -2,8 +2,8 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { getToken, mutate, query } from "@/lib/api";
+import ProjectTabs from "@/components/ProjectTabs";
 
 interface Project {
   id: string;
@@ -79,8 +79,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <Link href="/dashboard" className="text-sm text-neutral-400 hover:text-neutral-200">← Projects</Link>
-      <header className="mt-3 mb-6 flex items-center justify-between">
+      <ProjectTabs id={id} />
+      <header className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{project.name}</h1>
           <p className="font-mono text-xs text-neutral-500">{project.slug} · {project.status}</p>
