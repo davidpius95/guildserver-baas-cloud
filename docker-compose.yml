@@ -1,0 +1,58 @@
+name: baas-platform
+
+# Shared BaaS platform infrastructure. Joins the existing external `guildserver`
+# network so it can sit alongside the GuildServer PaaS stack without disruption.
+# The API/web services are added in a later phase once their images exist.
+
+services:
+  baas-postgres:
+    image: supabase/postgres:17.6.1.136
+    container_name: baas-postgres
+    restart: unless-stopped
+    shm_size: 256mb
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_PASSWORD: ${BAAS_PG_ADMIN_PASSWORD}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - baas-postgres-data:/var/lib/postgresql/data
+    networks:
+      - guildserver
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  baas-redis:
+    image: redis:7-alpine
+    container_name: baas-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - baas-redis-data:/data
+    networks:
+      - guildserver
+
+  baas-imgproxy:
+    image: darthsim/imgproxy:v3.30.1
+    container_name: baas-imgproxy
+    restart: unless-stopped
+    environment:
+      IMGPROXY_BIND: ":8080"
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+    networks:
+      - guildserver
+
+volumes:
+  baas-postgres-data:
+  baas-redis-data:
+
+networks:
+  guildserver:
+    external: true
+    name: guildserver
