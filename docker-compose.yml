@@ -2,7 +2,10 @@ name: baas-platform
 
 # Shared BaaS platform infrastructure. Joins the existing external `guildserver`
 # network so it can sit alongside the GuildServer PaaS stack without disruption.
-# The API/web services are added in a later phase once their images exist.
+#
+# Public routing (via the existing guildserver-traefik + *.guildserver.io tunnel):
+#   cloud.guildserver.io/{trpc,health,studio}  -> baas-api  (priority 20)
+#   cloud.guildserver.io/*                      -> baas-web  (priority 1)
 
 services:
   baas-postgres:
@@ -47,6 +50,68 @@ services:
       IMGPROXY_ENABLE_WEBP_DETECTION: "true"
     networks:
       - guildserver
+
+  baas-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: baas-api
+    restart: unless-stopped
+    depends_on:
+      baas-postgres:
+        condition: service_healthy
+      baas-redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      # Container-network overrides (the .env values are the host view).
+      DATABASE_URL: postgres://postgres:${BAAS_PG_ADMIN_PASSWORD}@baas-postgres:5432/postgres
+      REDIS_HOST: baas-redis
+      REDIS_PORT: 6379
+      # Reach tenant published DB ports via the host gateway (tenants live on their
+      # own per-project networks, not this one).
+      BAAS_TENANT_DB_HOST: host.docker.internal
+    ports:
+      - "4001:4001"
+    volumes:
+      # Orchestrate tenant stacks on the host daemon; tenant files at matching paths.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/baas-tenants:/opt/baas-tenants
+      - /opt/baas-backups:/opt/baas-backups
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - guildserver
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=guildserver"
+      - "traefik.http.routers.baas-api.entrypoints=web"
+      - "traefik.http.routers.baas-api.rule=Host(`cloud.guildserver.io`) && (PathPrefix(`/trpc`) || PathPrefix(`/health`) || PathPrefix(`/studio`))"
+      - "traefik.http.routers.baas-api.priority=20"
+      - "traefik.http.routers.baas-api.service=baas-api"
+      - "traefik.http.services.baas-api.loadbalancer.server.port=4001"
+
+  baas-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_BAAS_API_URL: https://cloud.guildserver.io
+    container_name: baas-web
+    restart: unless-stopped
+    depends_on:
+      - baas-api
+    networks:
+      - guildserver
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=guildserver"
+      - "traefik.http.routers.baas-web.entrypoints=web"
+      - "traefik.http.routers.baas-web.rule=Host(`cloud.guildserver.io`)"
+      - "traefik.http.routers.baas-web.priority=1"
+      - "traefik.http.routers.baas-web.service=baas-web"
+      - "traefik.http.services.baas-web.loadbalancer.server.port=3001"
 
 volumes:
   baas-postgres-data:
