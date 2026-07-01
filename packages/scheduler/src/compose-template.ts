@@ -411,6 +411,10 @@ ${resources(0.1, 0.1, cfg)}
     depends_on:
       meta: { condition: service_started }
     environment:
+      # Bind Next.js to all interfaces so the image's built-in healthcheck
+      # (which fetches 127.0.0.1:3000) can connect — otherwise Studio runs fine
+      # but is reported unhealthy forever.
+      HOSTNAME: "0.0.0.0"
       STUDIO_PG_META_URL: http://meta:8080
       POSTGRES_PASSWORD: ${cfg.dbPassword}
       DEFAULT_ORGANIZATION_NAME: ${cfg.projectSlug}
