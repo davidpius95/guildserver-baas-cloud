@@ -49,7 +49,9 @@ export const PORT_OFFSETS = {
 } as const;
 
 const cpu = (fraction: number, vcpu: number) => (Math.max(0.1, fraction * vcpu)).toFixed(2);
-const mem = (fraction: number, ramMb: number) => `${Math.max(64, Math.floor(fraction * ramMb))}M`;
+// 128M floor: several services (Kong, Postgres) OOM well below that regardless of
+// their fractional share on small tiers.
+const mem = (fraction: number, ramMb: number) => `${Math.max(128, Math.floor(fraction * ramMb))}M`;
 
 function resources(cpuFrac: number, memFrac: number, cfg: ProjectComposeConfig): string {
   return `    deploy:
@@ -261,7 +263,7 @@ ${resources(0.25, 0.4, cfg)}
     ports:
       - "${kongHttp}:8000"
       - "${kongHttps}:8443"
-${resources(0.1, 0.08, cfg)}
+${resources(0.1, 0.15, cfg)}
     networks: [default]
 
   auth:
@@ -322,6 +324,7 @@ ${resources(0.15, 0.15, cfg)}
       DB_ENC_KEY: supabaserealtime
       API_JWT_SECRET: ${cfg.jwtSecret}
       SECRET_KEY_BASE: ${cfg.jwtSecret}${cfg.jwtSecret}
+      METRICS_JWT_SECRET: ${cfg.jwtSecret}
       ERL_AFLAGS: -proto_dist inet_tcp
       RLIMIT_NOFILE: "10000"
       APP_NAME: realtime

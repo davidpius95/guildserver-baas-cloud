@@ -7,11 +7,15 @@ import { slugify } from "../lib/auth.js";
 import { enqueueProvision } from "../queues.js";
 import { protectedProcedure, router } from "../trpc/trpc.js";
 
+// A full 11-service Supabase stack (Postgres + Kong + GoTrue + PostgREST +
+// Realtime + Storage + imgproxy + pg-meta + edge-runtime + Studio + Supavisor)
+// needs meaningfully more than a single lightweight service — 1GB total OOM-kills
+// Kong alone. These floors match Supabase's own self-hosted minimums.
 const RESOURCE_TIERS = {
-  micro: { vcpu: 0.5, ramMb: 512, storageGb: 3 },
-  small: { vcpu: 1, ramMb: 1024, storageGb: 5 },
-  medium: { vcpu: 2, ramMb: 2048, storageGb: 10 },
-  large: { vcpu: 4, ramMb: 4096, storageGb: 20 },
+  micro: { vcpu: 1, ramMb: 1536, storageGb: 5 },
+  small: { vcpu: 2, ramMb: 2048, storageGb: 10 },
+  medium: { vcpu: 3, ramMb: 3072, storageGb: 20 },
+  large: { vcpu: 4, ramMb: 4096, storageGb: 40 },
 } as const;
 
 export const projectRouter = router({

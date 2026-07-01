@@ -20,7 +20,7 @@ import {
 } from "./node-selector";
 import { generateProjectSecrets } from "./secrets";
 
-const DEFAULTS = { ramMb: 1024, vcpu: 1, storageGb: 5 };
+const DEFAULTS = { ramMb: 2048, vcpu: 2, storageGb: 10 };
 
 function tenantDir(slug: string): string {
   return path.join(config.tenantDataDir, `baas-${slug}`);
