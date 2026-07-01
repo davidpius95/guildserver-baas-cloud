@@ -37,7 +37,7 @@ jobs:
             echo "== loading env =="
             set -a; . ./.env; set +a
             echo "== running migrations =="
-            pnpm db:migrate
+            pnpm --filter @guildserver/baas-db db:migrate
             echo "== rebuilding platform stack =="
             docker compose up -d --build
             echo "== health check =="

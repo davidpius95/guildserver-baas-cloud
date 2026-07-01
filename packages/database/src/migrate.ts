@@ -1,9 +1,13 @@
 import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { baasNodes } from "./schema";
+
+const migrationsFolder = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
@@ -14,7 +18,7 @@ async function main() {
   const db = drizzle(migrationClient);
 
   console.log("[migrate] running drizzle migrations…");
-  await migrate(db, { migrationsFolder: `${__dirname}/../migrations` });
+  await migrate(db, { migrationsFolder });
   console.log("[migrate] migrations applied");
 
   // Seed exactly one local compute node (single-node v1) if none exists.
