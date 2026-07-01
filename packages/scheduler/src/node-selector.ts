@@ -1,4 +1,4 @@
-import { and, baasNodes, db, eq, sql } from "./db";
+import { and, baasNodes, db, type DbOrTx, eq, sql } from "./db";
 
 export interface NodeSelection {
   id: string;
@@ -11,7 +11,7 @@ export interface NodeSelection {
   storageGbUsed: number;
 }
 
-type Executor = typeof db;
+type Executor = DbOrTx;
 
 /**
  * Single-node v1: return the one online compute node.

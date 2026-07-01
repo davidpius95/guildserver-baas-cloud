@@ -4,6 +4,7 @@ import {
   baasPortAllocations,
   baasProjects,
   db,
+  type DbOrTx,
   eq,
   inArray,
   lt,
@@ -12,7 +13,7 @@ import {
 import { EXCLUDED_PORTS, PORT_WINDOW, config } from "./config";
 
 /** Transaction type accepted by allocatePortBase — any drizzle executor. */
-type Executor = typeof db;
+type Executor = DbOrTx;
 
 /** Resolve true if the OS reports the port as bindable (i.e. free) right now. */
 function canBind(port: number): Promise<boolean> {
