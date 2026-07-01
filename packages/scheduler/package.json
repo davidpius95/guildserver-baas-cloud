@@ -1,0 +1,23 @@
+{
+  "name": "@guildserver/baas-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@guildserver/baas-db": "workspace:*",
+    "dockerode": "^4.0.4",
+    "drizzle-orm": "^0.39.3",
+    "jose": "^6.0.11",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@types/dockerode": "^3.3.35",
+    "@types/node": "^20.19.0",
+    "typescript": "^5.7.0"
+  }
+}
