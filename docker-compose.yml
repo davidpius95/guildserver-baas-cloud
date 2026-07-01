@@ -4,8 +4,8 @@ name: baas-platform
 # network so it can sit alongside the GuildServer PaaS stack without disruption.
 #
 # Public routing (via the existing guildserver-traefik + *.guildserver.io tunnel):
-#   cloud.guildserver.io/{trpc,health,studio}  -> baas-api  (priority 20)
-#   cloud.guildserver.io/*                      -> baas-web  (priority 1)
+#   cloud.guildserver.io/{trpc,health,studio,api}  -> baas-api  (priority 20)
+#   cloud.guildserver.io/*                          -> baas-web  (priority 1)
 
 services:
   baas-postgres:
@@ -87,7 +87,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=guildserver"
       - "traefik.http.routers.baas-api.entrypoints=web"
-      - "traefik.http.routers.baas-api.rule=Host(`cloud.guildserver.io`) && (PathPrefix(`/trpc`) || PathPrefix(`/health`) || PathPrefix(`/studio`))"
+      - "traefik.http.routers.baas-api.rule=Host(`cloud.guildserver.io`) && (PathPrefix(`/trpc`) || PathPrefix(`/health`) || PathPrefix(`/studio`) || PathPrefix(`/api`))"
       - "traefik.http.routers.baas-api.priority=20"
       - "traefik.http.routers.baas-api.service=baas-api"
       - "traefik.http.services.baas-api.loadbalancer.server.port=4001"
