@@ -158,7 +158,8 @@ export async function provisionProject(projectId: string): Promise<void> {
     }
 
     // ── Bring up the stack ──
-    await composeCli(composeFile(slug), ["up", "-d"], { timeoutMs: 300_000 });
+    // Generous timeout: the first tenant pulls ~11 images cold; later ones are cached.
+    await composeCli(composeFile(slug), ["up", "-d"], { timeoutMs: 900_000 });
     await waitForDbHealthy(slug, dbUser, dbName);
     await confirmPortBinding(hostPortBase);
 
