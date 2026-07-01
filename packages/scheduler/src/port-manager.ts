@@ -134,8 +134,12 @@ export async function releasePortAllocation(projectId: string): Promise<void> {
 /**
  * Reconcile DB port state against OS ground truth. Runs on a cron.
  * - `reserved` older than 10 min with no active project → auto-release (crashed provision).
- * - Logs (does not touch) any `bound` window whose ports are unexpectedly free,
- *   and any window occupied at OS level that DB thinks is free.
+ * - `bound` window free at OS level AND its project is gone (missing/null/deleting/error)
+ *   → auto-release the stranded window (crashed provision or project row deleted outside
+ *   deleteProject, which nulls the FK). Without this, failed provisions/branches leak a
+ *   10-port window permanently.
+ * - Logs (does not touch) a `bound` window free at OS level whose project still looks alive
+ *   (the health-reconciler owns that case).
  */
 export async function reconcilePortAllocations(): Promise<void> {
   const tenMinAgo = new Date(Date.now() - 10 * 60_000);
@@ -170,15 +174,41 @@ export async function reconcilePortAllocations(): Promise<void> {
 
   // Sanity-check bound windows against the OS.
   const bound = await db
-    .select({ portBase: baasPortAllocations.portBase, projectId: baasPortAllocations.projectId })
+    .select({
+      id: baasPortAllocations.id,
+      portBase: baasPortAllocations.portBase,
+      projectId: baasPortAllocations.projectId,
+    })
     .from(baasPortAllocations)
     .where(eq(baasPortAllocations.status, "bound"));
 
   for (const row of bound) {
-    // If the whole window is free at the OS level, the tenant's containers are gone.
-    if (await windowIsFree(row.portBase)) {
+    // A bound window whose OS ports are all free means the tenant's containers are gone.
+    if (!(await windowIsFree(row.portBase))) continue;
+
+    // Is the owning project still alive? Null FK (project row deleted) or a
+    // missing/deleting/error project means the window is genuinely stranded.
+    let projectGone = !row.projectId;
+    if (row.projectId) {
+      const proj = await db
+        .select({ status: baasProjects.status })
+        .from(baasProjects)
+        .where(eq(baasProjects.id, row.projectId))
+        .limit(1);
+      projectGone = !proj[0] || proj[0].status === "deleting" || proj[0].status === "error";
+    }
+
+    if (projectGone) {
+      await db
+        .update(baasPortAllocations)
+        .set({ status: "released", releasedAt: new Date() })
+        .where(eq(baasPortAllocations.id, row.id));
       console.warn(
-        `[port-manager] bound window ${row.portBase} appears free at OS level (project ${row.projectId ?? "?"}); health-reconciler should flag it`,
+        `[port-manager] released stranded bound window ${row.portBase} (project ${row.projectId ?? "none"} gone, OS ports free)`,
+      );
+    } else {
+      console.warn(
+        `[port-manager] bound window ${row.portBase} appears free at OS level (project ${row.projectId}); health-reconciler should flag it`,
       );
     }
   }
