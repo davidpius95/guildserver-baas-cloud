@@ -207,9 +207,11 @@ services:
     restart: unless-stopped
     shm_size: 256mb
     environment:
-      POSTGRES_USER: ${cfg.dbUser}
+      # The supabase/postgres image bakes in bootstrap scripts (migrate.sh) that
+      # hard-code the standard Supabase role model and expect the "postgres"
+      # superuser — do not override POSTGRES_USER/POSTGRES_DB. Isolation between
+      # tenants is at the container level (each tenant gets its own db container).
       POSTGRES_PASSWORD: ${cfg.dbPassword}
-      POSTGRES_DB: ${cfg.dbName}
       JWT_SECRET: ${cfg.jwtSecret}
     volumes:
       - db-data:/var/lib/postgresql/data
@@ -218,7 +220,7 @@ services:
     ports:
       - "${cfg.hostPortBase + PORT_OFFSETS.db}:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${cfg.dbUser}", "-d", "${cfg.dbName}"]
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
       interval: 5s
       timeout: 5s
       retries: 12

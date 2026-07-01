@@ -4,7 +4,6 @@
 export { config, EXCLUDED_PORTS, PORT_WINDOW } from "./config";
 export { assertEncryptionKey, encryptSecret, decryptSecret, decryptNullable } from "./crypto";
 export { generateProjectSecrets, type ProjectSecrets } from "./secrets";
-export { createTenantDatabase, dropTenantDatabase } from "./tenant-db";
 export {
   generateComposeYml,
   generateKongConfig,

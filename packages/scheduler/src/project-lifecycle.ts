@@ -75,8 +75,11 @@ export async function provisionProject(projectId: string): Promise<void> {
 
   try {
     const secrets = await generateProjectSecrets();
-    const dbName = `tenant_${slug}`.replace(/-/g, "_");
-    const dbUser = `tenant_${slug}`.replace(/-/g, "_");
+    // Each tenant runs its own dedicated Postgres container (supabase/postgres),
+    // whose baked-in bootstrap scripts require the standard "postgres" superuser —
+    // isolation between tenants comes from separate containers, not custom db/user names.
+    const dbName = "postgres";
+    const dbUser = "postgres";
 
     // ── One advisory-locked transaction: node capacity + port + usage + row ──
     const { hostPortBase, nodeId } = await db.transaction(async (tx) => {
