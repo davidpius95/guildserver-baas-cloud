@@ -35,8 +35,10 @@ async function main() {
     const schedulableRamMb = Number(
       process.env.BAAS_NODE_RAM_MB ?? Math.floor(totalRamMb * 0.6),
     );
-    const schedulableVcpu = Number(process.env.BAAS_NODE_VCPU ?? Math.max(1, totalVcpu - 1));
-    const storageGb = Number(process.env.BAAS_NODE_STORAGE_GB ?? 200);
+    // Docker CPU limits are soft caps, so tenants can share cores — allow ~2x
+    // overcommit of physical vCPUs. RAM stays conservative (hard mem_limit → OOM).
+    const schedulableVcpu = Number(process.env.BAAS_NODE_VCPU ?? Math.max(2, totalVcpu * 2));
+    const storageGb = Number(process.env.BAAS_NODE_STORAGE_GB ?? 1000);
 
     await db.insert(baasNodes).values({
       name: "local",

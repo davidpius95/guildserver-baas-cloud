@@ -23,14 +23,17 @@ async function loadProject(projectId: string) {
  * this provisions it and copies the parent data in.
  */
 export async function createBranch(branchProjectId: string, _branchName: string): Promise<void> {
-  const branch = await loadProject(branchProjectId);
-  if (!branch.parentProjectId) throw new Error(`Project ${branchProjectId} has no parentProjectId`);
-  const parent = await loadProject(branch.parentProjectId);
+  const before = await loadProject(branchProjectId);
+  if (!before.parentProjectId) throw new Error(`Project ${branchProjectId} has no parentProjectId`);
+  const parent = await loadProject(before.parentProjectId);
 
   // 1. Provision the branch stack (fresh, empty tenant DB).
   await provisionProject(branchProjectId);
 
-  // 2. Dump parent → restore into branch.
+  // 2. Reload the branch — provisionProject populated its dbUser/dbName/slug.
+  const branch = await loadProject(branchProjectId);
+
+  // 3. Dump parent → restore into branch.
   await copyDatabase(parent.slug, parent.dbUser!, parent.dbName!, branch.slug, branch.dbUser!, branch.dbName!);
 }
 
