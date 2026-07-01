@@ -1,12 +1,22 @@
 {
   "name": "guildserver-baas-cloud",
   "version": "1.0.0",
+  "description": "Self-hosted Supabase Cloud platform — multi-tenant BaaS on your own infrastructure",
   "private": true,
+  "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "dev": "turbo run dev",
-    "build": "turbo run build"
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate"
   },
   "devDependencies": {
-    "turbo": "latest"
-  }
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0",
+    "prettier": "^3.4.0"
+  },
+  "engines": { "node": ">=20", "pnpm": ">=9" },
+  "packageManager": "pnpm@9.15.0"
 }
