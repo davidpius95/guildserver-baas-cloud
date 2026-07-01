@@ -18,7 +18,6 @@ import {
   nodeHasCapacity,
   selectNode,
 } from "./node-selector";
-import { createTenantDatabase, dropTenantDatabase } from "./tenant-db";
 import { generateProjectSecrets } from "./secrets";
 
 const DEFAULTS = { ramMb: 1024, vcpu: 1, storageGb: 5 };
@@ -103,8 +102,10 @@ export async function provisionProject(projectId: string): Promise<void> {
           hostPortBase: portBase,
           dbName,
           dbUser,
-          dbHost: "db",
-          dbPort: 5432,
+          // Each tenant runs its own Postgres container; the pooled port is published
+          // on the node at hostPortBase + pooler offset for external clients.
+          dbHost: "127.0.0.1",
+          dbPort: portBase + PORT_OFFSETS.pooler,
           dbPassword: encryptSecret(secrets.dbPassword),
           jwtSecret: encryptSecret(secrets.jwtSecret),
           anonKey: encryptSecret(secrets.anonKey),
@@ -119,8 +120,8 @@ export async function provisionProject(projectId: string): Promise<void> {
       return { hostPortBase: portBase, nodeId: node.id };
     });
 
-    // ── Tenant database ──
-    await createTenantDatabase(dbName, dbUser, secrets.dbPassword);
+    // Note: the tenant's own `db` container (supabase/postgres) bootstraps the
+    // database, user and Supabase roles from POSTGRES_* env — no shared-platform DB.
 
     // ── Generate + write compose files ──
     const apiExternalUrl = `${scheme()}://${slug}.${config.baseDomain}`;
@@ -216,14 +217,7 @@ export async function deleteProject(projectId: string): Promise<void> {
     console.warn(`[lifecycle] compose down failed for ${slug}:`, err);
   }
 
-  // Drop tenant database + role.
-  if (project.dbName && project.dbUser) {
-    try {
-      await dropTenantDatabase(project.dbName, project.dbUser);
-    } catch (err) {
-      console.warn(`[lifecycle] dropTenantDatabase failed for ${slug}:`, err);
-    }
-  }
+  // The tenant DB lived in its own container/volume, removed by `compose down -v` above.
 
   // Release resources.
   if (project.nodeId) {
