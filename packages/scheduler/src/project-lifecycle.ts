@@ -63,6 +63,31 @@ async function waitForDbHealthy(slug: string, dbUser: string, dbName: string, ti
   throw new Error(`Tenant DB ${container} did not become healthy within ${timeoutMs}ms`);
 }
 
+/** Standard Supabase per-service roles the bootstrap creates but doesn't password-sync. */
+const SERVICE_ROLES = ["supabase_admin", "supabase_auth_admin", "authenticator", "supabase_storage_admin"];
+
+/**
+ * Force every standard Supabase service role's password to match POSTGRES_PASSWORD.
+ * The supabase/postgres bootstrap creates these roles but doesn't reliably set their
+ * passwords from our POSTGRES_PASSWORD, so auth/rest/storage/realtime fail SASL auth
+ * against a freshly-provisioned tenant otherwise.
+ */
+async function syncServiceRolePasswords(slug: string, dbPassword: string): Promise<void> {
+  const container = `baas-${slug}-db`;
+  const escaped = dbPassword.replace(/'/g, "''");
+  for (const role of SERVICE_ROLES) {
+    await dockerExec(container, [
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "postgres",
+      "-c",
+      `DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname='${role}') THEN ALTER ROLE ${role} WITH LOGIN PASSWORD '${escaped}'; END IF; END $$;`,
+    ]);
+  }
+}
+
 /**
  * Provision a full tenant Supabase stack for an existing (status=provisioning) project row.
  */
@@ -169,9 +194,15 @@ export async function provisionProject(projectId: string): Promise<void> {
     );
 
     // ── Bring up the stack ──
-    // Generous timeout: the first tenant pulls ~11 images cold; later ones are cached.
-    await composeCli(composeFile(slug), ["up", "-d"], { timeoutMs: 900_000 });
+    // Start `db` alone first: dependent services (auth/rest/storage) race the
+    // bootstrap's service-role creation, and their passwords need to be synced to
+    // our POSTGRES_PASSWORD *before* those services attempt to connect.
+    await composeCli(composeFile(slug), ["up", "-d", "db"], { timeoutMs: 900_000 });
     await waitForDbHealthy(slug, dbUser, dbName);
+    await syncServiceRolePasswords(slug, secrets.dbPassword);
+
+    // Now bring up the rest of the stack.
+    await composeCli(composeFile(slug), ["up", "-d"], { timeoutMs: 900_000 });
     await confirmPortBinding(hostPortBase);
 
     // ── Endpoints + active ──
