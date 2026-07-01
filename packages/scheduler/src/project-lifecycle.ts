@@ -71,6 +71,10 @@ const SERVICE_ROLES = ["supabase_admin", "supabase_auth_admin", "authenticator",
  * The supabase/postgres bootstrap creates these roles but doesn't reliably set their
  * passwords from our POSTGRES_PASSWORD, so auth/rest/storage/realtime fail SASL auth
  * against a freshly-provisioned tenant otherwise.
+ *
+ * `supabase_admin`, not `postgres`, is the actual break-glass superuser in this image
+ * (`postgres` lacks CREATEROLE). `docker exec` talks to the container's local unix
+ * socket under trust auth, so connecting as supabase_admin needs no password here.
  */
 async function syncServiceRolePasswords(slug: string, dbPassword: string): Promise<void> {
   const container = `baas-${slug}-db`;
@@ -79,7 +83,7 @@ async function syncServiceRolePasswords(slug: string, dbPassword: string): Promi
     await dockerExec(container, [
       "psql",
       "-U",
-      "postgres",
+      "supabase_admin",
       "-d",
       "postgres",
       "-c",
