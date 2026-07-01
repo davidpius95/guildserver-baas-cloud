@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { config } from "./config";
 import { decryptSecret } from "./crypto";
 import { baasMetrics, baasProjects, db, eq, lt } from "./db";
 import { docker } from "./docker";
@@ -28,7 +29,7 @@ function cpuPercent(stats: DockerStats): number {
  * instead we exec against the tenant DB container via its published host port. */
 function tenantDbUrl(hostPortBase: number, dbUser: string, dbPassword: string, dbName: string): string {
   const dbPort = hostPortBase + 4; // PORT_OFFSETS.db
-  return `postgres://${dbUser}:${dbPassword}@localhost:${dbPort}/${dbName}`;
+  return `postgres://${dbUser}:${dbPassword}@${config.tenantDbHost}:${dbPort}/${dbName}`;
 }
 
 export async function collectProjectMetrics(projectId: string): Promise<void> {

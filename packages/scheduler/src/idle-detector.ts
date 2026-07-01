@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { config } from "./config";
 import { decryptSecret } from "./crypto";
 import { and, baasProjects, db, eq, isNotNull } from "./db";
 import { pauseProject } from "./project-lifecycle";
@@ -21,7 +22,7 @@ export async function detectIdleProjects(): Promise<void> {
       continue;
     }
     const dbPort = project.hostPortBase + 4; // PORT_OFFSETS.db
-    const url = `postgres://${project.dbUser}:${decryptSecret(project.dbPassword)}@localhost:${dbPort}/${project.dbName}`;
+    const url = `postgres://${project.dbUser}:${decryptSecret(project.dbPassword)}@${config.tenantDbHost}:${dbPort}/${project.dbName}`;
 
     let activeConns = 0;
     const sqlc = postgres(url, { max: 1, connect_timeout: 5 });

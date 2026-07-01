@@ -7,6 +7,9 @@ export const config = {
   tenantDataDir: process.env.TENANT_DATA_DIR ?? "/opt/baas-tenants",
   backupDir: process.env.BAAS_BACKUP_DIR ?? "/opt/baas-backups",
   dockerNetwork: process.env.BAAS_DOCKER_NETWORK ?? "guildserver",
+  // Host used to reach tenants' published DB ports. "localhost" when the API runs
+  // as a host process; "host.docker.internal" when it runs containerized.
+  tenantDbHost: process.env.BAAS_TENANT_DB_HOST ?? "localhost",
   baseDomain: process.env.BAAS_BASE_DOMAIN ?? "guildserver.io",
   fallbackDomain: process.env.BAAS_FALLBACK_DOMAIN ?? "guildserver.io",
   tls: (process.env.BAAS_TLS ?? "false") === "true",
