@@ -1,8 +1,5 @@
-import postgres from "postgres";
-import { config } from "./config";
-import { decryptSecret } from "./crypto";
 import { baasMetrics, baasProjects, db, eq, lt } from "./db";
-import { docker } from "./docker";
+import { docker, dockerExec } from "./docker";
 
 interface DockerStats {
   cpu_stats: {
@@ -23,13 +20,6 @@ function cpuPercent(stats: DockerStats): number {
   const cpus = stats.cpu_stats.online_cpus ?? 1;
   if (sysDelta <= 0 || cpuDelta <= 0) return 0;
   return (cpuDelta / sysDelta) * cpus * 100;
-}
-
-/** Tenant admin connection URL through the platform Postgres is not used here;
- * instead we exec against the tenant DB container via its published host port. */
-function tenantDbUrl(hostPortBase: number, dbUser: string, dbPassword: string, dbName: string): string {
-  const dbPort = hostPortBase + 4; // PORT_OFFSETS.db
-  return `postgres://${dbUser}:${dbPassword}@${config.tenantDbHost}:${dbPort}/${dbName}`;
 }
 
 export async function collectProjectMetrics(projectId: string): Promise<void> {
@@ -53,34 +43,26 @@ export async function collectProjectMetrics(projectId: string): Promise<void> {
   let txCommitted: number | null = null;
   let txRolledBack: number | null = null;
 
-  // Query pg_stat_database via the tenant DB's published port using decrypted creds.
-  // Note: caller passes decrypted values through project row? Secrets are encrypted, so
-  // metrics DB stats are best-effort and skipped if creds unavailable at this layer.
+  // Query pg_stat_database via `docker exec` into the tenant DB container (local unix
+  // socket, trust auth) rather than a TCP connection — the API may run containerized
+  // on a different docker network and can't reach the tenant's host-published port.
   try {
-    if (project.dbName && project.dbUser && project.dbPassword) {
-      // dbPassword is stored encrypted — decrypt to read pg_stat_database.
-      const url = tenantDbUrl(
-        project.hostPortBase,
-        project.dbUser,
-        decryptSecret(project.dbPassword),
-        project.dbName,
-      );
-      const sqlc = postgres(url, { max: 1, connect_timeout: 5 });
-      try {
-        const [stat] = await sqlc`
-          SELECT numbackends, xact_commit, xact_rollback,
-                 pg_database_size(current_database()) AS size_bytes
-          FROM pg_stat_database WHERE datname = current_database()
-        `;
-        if (stat) {
-          activeConnections = Number(stat.numbackends);
-          txCommitted = Number(stat.xact_commit);
-          txRolledBack = Number(stat.xact_rollback);
-          dbSizeMb = (Number(stat.size_bytes) / (1024 * 1024)).toFixed(2);
-        }
-      } finally {
-        await sqlc.end();
-      }
+    const { stdout } = await dockerExec(container, [
+      "psql",
+      "-U",
+      "supabase_admin",
+      "-d",
+      "postgres",
+      "-tAF|",
+      "-c",
+      "SELECT numbackends, xact_commit, xact_rollback, pg_database_size(current_database()) FROM pg_stat_database WHERE datname = current_database()",
+    ]);
+    const parts = stdout.trim().split("|");
+    if (parts.length >= 4) {
+      activeConnections = Number(parts[0]);
+      txCommitted = Number(parts[1]);
+      txRolledBack = Number(parts[2]);
+      dbSizeMb = (Number(parts[3]) / (1024 * 1024)).toFixed(2);
     }
   } catch {
     // best-effort

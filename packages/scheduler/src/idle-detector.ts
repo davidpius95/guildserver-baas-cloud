@@ -1,7 +1,5 @@
-import postgres from "postgres";
-import { config } from "./config";
-import { decryptSecret } from "./crypto";
 import { and, baasProjects, db, eq, isNotNull } from "./db";
+import { dockerExec } from "./docker";
 import { pauseProject } from "./project-lifecycle";
 
 /**
@@ -18,29 +16,27 @@ export async function detectIdleProjects(): Promise<void> {
     );
 
   for (const project of candidates) {
-    if (project.hostPortBase == null || !project.dbName || !project.dbUser || !project.dbPassword) {
-      continue;
-    }
-    const dbPort = project.hostPortBase + 4; // PORT_OFFSETS.db
-    const url = `postgres://${project.dbUser}:${decryptSecret(project.dbPassword)}@${config.tenantDbHost}:${dbPort}/${project.dbName}`;
+    if (project.hostPortBase == null) continue;
+    const container = `baas-${project.slug}-db`;
 
+    // Count non-idle client connections via `docker exec` (local socket, trust auth) —
+    // works whether the API runs as a host process or containerized.
     let activeConns = 0;
-    const sqlc = postgres(url, { max: 1, connect_timeout: 5 });
     try {
-      const [row] = await sqlc`
-        SELECT count(*)::int AS n FROM pg_stat_activity
-        WHERE datname = current_database()
-          AND state <> 'idle'
-          AND backend_type = 'client backend'
-          AND pid <> pg_backend_pid()
-      `;
-      activeConns = row?.n ?? 0;
+      const { stdout } = await dockerExec(container, [
+        "psql",
+        "-U",
+        "supabase_admin",
+        "-d",
+        "postgres",
+        "-tAc",
+        "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND state <> 'idle' AND backend_type = 'client backend' AND pid <> pg_backend_pid()",
+      ]);
+      activeConns = Number(stdout.trim()) || 0;
     } catch {
       // If we can't reach the tenant DB, skip this cycle rather than mispause.
-      await sqlc.end();
       continue;
     }
-    await sqlc.end();
 
     const now = Date.now();
     if (activeConns > 0) {
