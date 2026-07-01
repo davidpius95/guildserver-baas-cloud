@@ -160,6 +160,14 @@ export async function provisionProject(projectId: string): Promise<void> {
       await mkdir(path.join(dir, "wal-archive"), { recursive: true });
     }
 
+    // edge-runtime requires a main entrypoint to boot even with zero functions deployed.
+    const functionsMainDir = path.join(dir, "functions", "main");
+    await mkdir(functionsMainDir, { recursive: true });
+    await writeFile(
+      path.join(functionsMainDir, "index.ts"),
+      `Deno.serve(() => new Response("ok", { status: 200 }));\n`,
+    );
+
     // ── Bring up the stack ──
     // Generous timeout: the first tenant pulls ~11 images cold; later ones are cached.
     await composeCli(composeFile(slug), ["up", "-d"], { timeoutMs: 900_000 });

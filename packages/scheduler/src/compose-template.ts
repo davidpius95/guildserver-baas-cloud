@@ -186,7 +186,12 @@ sinks:
 /** Generate the complete docker-compose.yml for a tenant stack. */
 export function generateComposeYml(cfg: ProjectComposeConfig): string {
   const name = (svc: string) => `baas-${cfg.projectSlug}-${svc}`;
-  const dbUrl = `postgres://${cfg.dbUser}:${cfg.dbPassword}@db:5432/${cfg.dbName}`;
+  // The supabase/postgres image's bootstrap creates standard per-service roles
+  // (supabase_auth_admin, authenticator, supabase_storage_admin, supabase_admin),
+  // all sharing POSTGRES_PASSWORD — services must connect as their own role, not
+  // the bootstrap "postgres" superuser, or schema-level grants deny them access.
+  const roleUrl = (role: string) => `postgres://${role}:${cfg.dbPassword}@db:5432/postgres`;
+  const dbUrl = roleUrl("postgres");
   const kongHttp = cfg.hostPortBase + PORT_OFFSETS.kongHttp;
   const kongHttps = cfg.hostPortBase + PORT_OFFSETS.kongHttps;
   const studioPort = cfg.hostPortBase + PORT_OFFSETS.studio;
@@ -270,7 +275,7 @@ ${resources(0.1, 0.08, cfg)}
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${cfg.apiExternalUrl}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: ${dbUrl}
+      GOTRUE_DB_DATABASE_URL: ${roleUrl("supabase_auth_admin")}
       GOTRUE_SITE_URL: ${cfg.siteUrl}
       GOTRUE_JWT_SECRET: ${cfg.jwtSecret}
       GOTRUE_JWT_EXP: 3600
@@ -293,7 +298,7 @@ ${resources(0.15, 0.2, cfg)}
     depends_on:
       db: { condition: service_healthy }
     environment:
-      PGRST_DB_URI: ${dbUrl}
+      PGRST_DB_URI: ${roleUrl("authenticator")}
       PGRST_DB_SCHEMAS: public,storage,graphql_public
       PGRST_DB_ANON_ROLE: anon
       PGRST_JWT_SECRET: ${cfg.jwtSecret}
@@ -311,9 +316,9 @@ ${resources(0.15, 0.15, cfg)}
       PORT: 4000
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: ${cfg.dbUser}
+      DB_USER: supabase_admin
       DB_PASSWORD: ${cfg.dbPassword}
-      DB_NAME: ${cfg.dbName}
+      DB_NAME: postgres
       DB_ENC_KEY: supabaserealtime
       API_JWT_SECRET: ${cfg.jwtSecret}
       SECRET_KEY_BASE: ${cfg.jwtSecret}${cfg.jwtSecret}
@@ -337,7 +342,7 @@ ${resources(0.1, 0.1, cfg)}
       SERVICE_KEY: ${cfg.serviceRoleKey}
       POSTGREST_URL: http://rest:3000
       PGRST_JWT_SECRET: ${cfg.jwtSecret}
-      DATABASE_URL: ${dbUrl}
+      DATABASE_URL: ${roleUrl("supabase_storage_admin")}
       FILE_SIZE_LIMIT: 52428800
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
@@ -374,8 +379,8 @@ ${resources(0.1, 0.1, cfg)}
       PG_META_PORT: 8080
       PG_META_DB_HOST: db
       PG_META_DB_PORT: 5432
-      PG_META_DB_NAME: ${cfg.dbName}
-      PG_META_DB_USER: ${cfg.dbUser}
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
       PG_META_DB_PASSWORD: ${cfg.dbPassword}
     networks: [default]
 
@@ -392,7 +397,7 @@ ${resources(0.1, 0.1, cfg)}
       SUPABASE_SERVICE_ROLE_KEY: ${cfg.serviceRoleKey}
       SUPABASE_DB_URL: ${dbUrl}
     volumes:
-      - functions-data:/home/deno/functions
+      - ./functions:/home/deno/functions
     command: ["start", "--main-service", "/home/deno/functions/main"]
     networks: [default]
 
@@ -422,7 +427,6 @@ ${analyticsServices(cfg, name)}
 volumes:
   db-data:
   storage-data:
-  functions-data:
 
 networks:
   default:
