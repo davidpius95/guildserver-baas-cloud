@@ -1,0 +1,50 @@
+name: Deploy to server
+
+# Push to main -> server pulls latest, installs, migrates, rebuilds the BaaS stack.
+# The server hosts the running GuildServer PaaS stack too; this workflow only
+# touches the BaaS platform (baas-postgres, baas-redis, baas-imgproxy, api, web).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            cd ~/guildserver-baas-cloud
+            echo "== pulling latest =="
+            git fetch --prune origin main
+            git reset --hard origin/main
+            echo "== installing deps =="
+            export PATH="$HOME/.local/share/pnpm:$PATH"
+            pnpm install --frozen-lockfile
+            echo "== running migrations =="
+            pnpm db:migrate
+            echo "== rebuilding platform stack =="
+            docker compose up -d --build
+            echo "== health check =="
+            for i in $(seq 1 30); do
+              if curl -fsS http://localhost:4001/health >/dev/null 2>&1; then
+                echo "API healthy"; exit 0
+              fi
+              sleep 2
+            done
+            echo "API did not become healthy in time" >&2
+            docker compose ps
+            exit 1
